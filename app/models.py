@@ -1,4 +1,5 @@
 from app import db
+from flask_login import LoginManager , UserMixin , login_required ,login_user, logout_user,current_user
 
 class Product(db.Model):
     p_id = db.Column(db.Integer, primary_key=True)
@@ -14,14 +15,17 @@ class Category(db.Model):
     c_name = db.Column(db.String(128))
     c_description = db.Column(db.Text)
 
-class User(db.Model):
+class User(UserMixin, db.Model):
     u_id = db.Column(db.Integer, primary_key=True)
-    u_name = db.Column(db.String(128))
+    u_name = db.Column(db.String(128), unique=True, nullable=False) 
     u_email = db.Column(db.String(128))
     u_details = db.Column(db.Text)
     password = db.Column(db.String(128))
+    
+    def get_id(self):
+        return str(self.u_id) 
 
-class Supplier(db.Model):
+class Supplier(UserMixin, db.Model):
     supplier_id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(128))
     contact_info = db.Column(db.String(128))
