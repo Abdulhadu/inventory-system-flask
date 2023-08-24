@@ -1,5 +1,6 @@
 from app import db
 from flask_login import LoginManager , UserMixin , login_required ,login_user, logout_user,current_user
+from datetime import datetime
 
 class Product(db.Model):
     p_id = db.Column(db.Integer, primary_key=True)
@@ -18,7 +19,7 @@ class Category(db.Model):
 class User(UserMixin, db.Model):
     u_id = db.Column(db.Integer, primary_key=True)
     u_name = db.Column(db.String(128), unique=True, nullable=False) 
-    u_email = db.Column(db.String(128))
+    u_email = db.Column(db.String(128),unique=True)
     u_details = db.Column(db.Text)
     password = db.Column(db.String(128))
     
@@ -40,4 +41,13 @@ class Order(db.Model):
     item_id = db.Column(db.Integer, db.ForeignKey('order_item.item_id'))
     u_id = db.Column(db.Integer, db.ForeignKey('user.u_id'))
     supplier_id = db.Column(db.Integer, db.ForeignKey('supplier.supplier_id'))
-    created_at = db.Column(db.DateTime)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    
+class Admin(UserMixin, db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    email = db.Column(db.String(128),unique=True, nullable=False)
+    password = db.Column(db.String(128))
+    is_admin = db.Column(db.Boolean, default=True)
+    
+    def get_id(self):
+        return str(self.id) 
