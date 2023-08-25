@@ -6,14 +6,22 @@ from app.models import Product, Category, User, OrderItem, Order, Supplier, Admi
 from flask_login import LoginManager , UserMixin , login_required ,login_user, logout_user,current_user
 from sqlalchemy import insert, update, delete
 from functools import wraps
+from blinker import Namespace
 
 
 login_manager = LoginManager()
 login_manager.init_app(app)
 
+# ---------------------------------- Creating Signal ---------------------------
+signal_namespace = Namespace()
+
+product_added_signal = signal_namespace.signal('product-added')
+def send_product_added_email(sender, product):
+    print(f"Email sent for product added: {product}")
 
 
-# App main route + generic routing
+product_added_signal.connect(send_product_added_email, app)
+
 @app.route("/")
 def hello_world():
     return "<p>Hello, World!</p>"
@@ -171,7 +179,6 @@ def logout():
 # ------------------------------------- Admin Section ---------------------
 
 @app.route('/admin', methods=['GET', 'POST'])
-@admin_required
 def login_Admin():
     if request.method == 'POST':
         admin_data = request.json  # Get the JSON data from the request
@@ -231,90 +238,92 @@ def filter_products():
     
 @app.route('/products', methods=['GET'])
 def get_products():
-    products = db.session.query(Product).all()
+    # Using Searlizers
+    return Product.fs_get_delete_put_post()
+    # products = db.session.query(Product).all()
+    # product_list = []
+    # for product in products:
+    #     product_data = {
+    #         "p_id": product.p_id,
+    #         "c_id": product.c_id,
+    #         "title": product.title,
+    #         "description": product.description,
+    #         "quantity": product.quantity,
+    #         "size": product.size,
+    #         "price": product.price
+    #     }
+    #     product_list.append(product_data)
     
-    product_list = []
-    for product in products:
-        product_data = {
-            "p_id": product.p_id,
-            "c_id": product.c_id,
-            "title": product.title,
-            "description": product.description,
-            "quantity": product.quantity,
-            "size": product.size,
-            "price": product.price
-        }
-        product_list.append(product_data)
-    
-    return jsonify(product_list)
+    # return jsonify(product_list)
 
 
 @app.route('/addProducts', methods=['POST'])
 @admin_required
 def addProducts():
-    if request.method == "POST":
-        product= request.json  # Get the JSON data from the request
-        c_id = product.get('c_id')
-        title= product.get('title')
-        description = product.get('description')
-        quantity = product.get('quantity')
-        size = product.get('size')
-        price = product.get('price')
-        stmt = insert(Product).values(c_id=c_id, title=title, description=description, quantity=quantity, size=size, price=price)
-        db.session.execute(stmt)
-        db.session.commit()
-        
-        return jsonify({"message": "Product added successfully"}), 201
-    else:
-        return jsonify({"message": "Invalid request"}), 400
+    # Using Searlizer 
+    return Product.fs_get_delete_put_post()
+    # if request.method == "POST":
+    #     product= request.json  # Get the JSON data from the request
+    #     c_id = product.get('c_id')
+    #     title= product.get('title')
+    #     description = product.get('description')
+    #     quantity = product.get('quantity')
+    #     size = product.get('size')
+    #     price = product.get('price')
+    #     db.session.add(product)
+    #     db.session.commit()
+    #     product_added_signal.send(app, product=product)
+    #     return jsonify({"message": "Product added successfully"}), 201
+    # else:
+    #     return jsonify({"message": "Invalid request"}), 400
 
          
-@app.route('/updateProduct/<int:sno>', methods=['PATCH'])
+@app.route('/updateProduct/<int:sno>', methods=['PUT'])
 @admin_required
 def updateProducts(sno):
-    if request.method == "PATCH":
-        product = request.json 
-        c_id = product.get('c_id')
-        title = product.get('title')
-        description = product.get('description')
-        quantity = product.get('quantity')
-        size = product.get('size')
-        price = product.get('price')
-        existing_product = Product.query.get(sno)
+    return Product.fs_get_delete_put_post(sno)
+    # if request.method == "PATCH":
+    #     product = request.json 
+    #     c_id = product.get('c_id')
+    #     title = product.get('title')
+    #     description = product.get('description')
+    #     quantity = product.get('quantity')
+    #     size = product.get('size')
+    #     price = product.get('price')
+    #     existing_product = Product.query.get(sno)
         
-        if not existing_product:
-            return jsonify({"error": "Category not found"}), 404
+    #     if not existing_product:
+    #         return jsonify({"error": "Category not found"}), 404
         
-        if existing_product.p_id != sno:
-            return jsonify({"error": "Provided product does not match sno"}), 400
-        
-        update_stmt = (update(Product)
-            .where(Product.p_id == sno)
-            .values(
-                c_id=c_id,
-                title=title,
-                description=description,
-                quantity=quantity,
-                size=size,
-                price=price
-            )
-        )
-        db.session.execute(update_stmt)
-        db.session.commit()
-        
-        return jsonify({"message": "Product added successfully"}), 201
-    else:
-        return jsonify({"message": "Invalid request"}), 400  
+    #     if existing_product.p_id != sno:
+    #         return jsonify({"error": "Provided product does not match sno"}), 400
+    #     update_stmt = (update(Product)
+    #         .where(Product.p_id == sno)
+    #         .values(
+    #             c_id=c_id,
+    #             title=title,
+    #             description=description,
+    #             quantity=quantity,
+    #             size=size,
+    #             price=price
+    #         )
+    #     )
+    #     db.session.execute(update_stmt)
+    #     db.session.commit()
+    #     return jsonify({"message": "Product added successfully"}), 201
+    # else:
+    #     return jsonify({"message": "Invalid request"}), 400  
 
 
 
 @app.route('/deleteProduct/<int:sno>', methods=['DELETE'])
 @admin_required
 def deleteProduct(sno):
-        delete_stmt = (delete(Product).where(Product.p_id == sno))
-        db.session.execute(delete_stmt)
-        db.session.commit()
-        return jsonify({'message': 'product deleted'})   
+    return Product.fs_get_delete_put_post(sno)
+        # delete_stmt = (delete(Product).where(Product.p_id == sno))
+        # db.session.execute(delete_stmt)
+        # db.session.commit()
+        # return jsonify({'message': 'product deleted'})   
     
     
 # ---------------------------------- Category Section ------------------------
@@ -335,7 +344,6 @@ def get_category():
         category_list.append(category_data)
     
     return jsonify(category_list)
-
 
 
 @app.route('/addCategory', methods=['POST'])
@@ -386,14 +394,13 @@ def deleteCategory(sno):
         delete_stmt = (delete(Category).where(Category.c_id == sno))
         db.session.execute(delete_stmt)
         db.session.commit()
-        return jsonify({'message': 'product deleted'})   
+        return jsonify({'message': 'Category deleted'})   
     
 # ---------------------------- Create user -------------------------------
 
-
     
 @app.route('/user', methods=['GET'])
-@user_required
+@admin_required
 def get_user():
     users = db.session.query(User).all()
     user_list = []

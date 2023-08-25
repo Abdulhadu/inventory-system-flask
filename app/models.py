@@ -1,8 +1,11 @@
 from app import db
 from flask_login import LoginManager , UserMixin , login_required ,login_user, logout_user,current_user
 from datetime import datetime
+from flask_serialize import FlaskSerialize
 
-class Product(db.Model):
+fs_mixin = FlaskSerialize(db)
+
+class Product(db.Model, fs_mixin):
     p_id = db.Column(db.Integer, primary_key=True)
     c_id = db.Column(db.Integer, db.ForeignKey('category.c_id'))
     title = db.Column(db.String(128))
@@ -10,6 +13,27 @@ class Product(db.Model):
     quantity = db.Column(db.Integer)
     size = db.Column(db.String(64))
     price = db.Column(db.Float)
+    
+    # serializer fields
+    __fs_create_fields__ = __fs_update_fields__ = ['title', 'description', 'quantity', 'size', 'price']
+
+    def __fs_can_delete__(self):
+        if self.price == 1234:
+            raise Exception('Deletion not allowed. Magic value!')
+        return True
+
+    def __fs_verify__(self, create=False):
+        if len(self.title or '') < 1:
+            raise Exception('Missing title')
+        return True
+
+    def __repr__(self):
+        return f'<Product {self.p_id} {self.title}>'
+    
+    # def __repr__(self):
+    #     return '<Setting %r %r %r>' % (self.id, self.setting_type, self.value)
+    
+
 
 class Category(db.Model):
     c_id = db.Column(db.Integer, primary_key=True)
