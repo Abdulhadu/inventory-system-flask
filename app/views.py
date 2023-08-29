@@ -1,11 +1,16 @@
-from flask import Flask, render_template, request, session,  redirect, flash , jsonify, g
+from flask import Flask, render_template, request, session,  redirect, flash , jsonify, g, url_for
 from jinja2  import TemplateNotFound
 from app import app
 from app import db 
-from app.models import Product, Category, User, OrderItem, Order, Supplier, Admin
+from app.models import Product, Category, User, OrderItem, Order, Supplier, Admin, MacAddress
 from flask_login import LoginManager , UserMixin , login_required ,login_user, logout_user,current_user
 from sqlalchemy import insert, update, delete
 from functools import wraps
+import pyotp
+import wmi
+import netifaces
+import pythoncom
+from getmac import get_mac_address as gma
 from blinker import Namespace
 
 
@@ -107,6 +112,7 @@ def get_product():
     return jsonify({"products": newProducts})
 
 # -------------------------------- Loader ------------------------
+
 # Prev Loader 
 # @login_manager.user_loader
 # def load_user(id):
@@ -119,6 +125,7 @@ def load_user(user_id):
     if user is None:
         user = Admin.query.get(int(user_id))
     return user
+
 # --------------------------- Decorators --------------------------
 
 
@@ -126,8 +133,14 @@ def admin_required(view_func):
     @wraps(view_func)
     def wrapper(*args, **kwargs):
         print(current_user.__dict__)  # Print user attributes for debugging
-        if current_user.is_authenticated and getattr(current_user, 'is_admin', False):
-            return view_func(*args, **kwargs)
+        if current_user.is_authenticated and session.get('authenticated') and getattr(current_user, 'is_admin', False):
+            stored_mac_address = session.get('mac_address')
+            actual_mac_address = get_mac_address()
+
+            if stored_mac_address and actual_mac_address and stored_mac_address == actual_mac_address:
+                return view_func(*args, **kwargs)
+            else:
+                return jsonify({"message": "Access denied due to MAC address mismatch"}), 403
         else:
             return jsonify({"message": "This feature is authorized for admin users only"}), 401
     return wrapper
@@ -135,30 +148,116 @@ def admin_required(view_func):
 def user_required(view_func):
     @wraps(view_func)
     def wrapper(*args, **kwargs):
-        if current_user.is_authenticated:
-            return view_func(*args, **kwargs)
+        if current_user.is_authenticated and session.get('authenticated'):
+            stored_mac_address = session.get('mac_address')
+            actual_mac_address = get_mac_address()
+
+            if stored_mac_address and actual_mac_address and stored_mac_address == actual_mac_address:
+                return view_func(*args, **kwargs)
+            else:
+                return jsonify({"message": "Access denied due to MAC address mismatch"}), 403
         return jsonify({"message": "Login Required for Normal User"}), 401  
         
     return wrapper
 
 # ---------------------------------- user Login Section ---------------
 
+@app.route("/login")
+def login_page():
+    return render_template("login.html")
+
+
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        user_data = request.json  # Get the JSON data from the request
-        username = user_data.get('username')
-        password = user_data.get('password')
+        # user_data = request.json  # Get the JSON data from the request
+        # username = user_data.get('username')
+        # password = user_data.get('password')
+        username = request.form.get("username")
+        password = request.form.get("password")
         user = User.query.filter_by(u_name=username).first()
         if user and user.password == password:
-            login_user(user)
-            return jsonify({"message": "Logged In"}), 200
+            mac_address = gma()
+            print("mac address is: ", mac_address)
+
+            existing_mac_address = MacAddress.query.filter_by(user_id=user.u_id, mac_address=mac_address).first()
+            if existing_mac_address:
+                flash("Device already registered.", "info")
+            else:
+                new_mac_address = MacAddress(user_id=user.u_id, mac_address=mac_address)
+                db.session.add(new_mac_address)
+                db.session.commit()
+                flash("Device registered successfully.", "success")
+
+                login_user(user)
+            return redirect(url_for("login_2fa"))
         else:
-            return jsonify({'error':'Invalid Credentials'}),401
+            flash("You have supplied invalid login credentials!", "danger")
+            return redirect(url_for("login"))
     else:
-        return jsonify({"message": "Login failed"}), 401
+        return jsonify({"message": "Invalid Request Method"}), 401
 
 
+def get_mac_address():
+    pythoncom.CoInitialize() 
+    c = wmi.WMI()
+    wifi_interface = None
+
+    for interface in c.Win32_NetworkAdapter():
+        if interface.NetConnectionID and "Wi-Fi" in interface.NetConnectionID:
+            print("Detected Wi-Fi interface:", interface.NetConnectionID)
+            wifi_interface = interface
+            break
+
+    if wifi_interface:
+        address = wifi_interface.MACAddress
+        return address
+    else:
+        return None
+
+def store_mac_address(user_id, mac_address):
+    mac_entry = MacAddress(user_id=user_id, mac_address=mac_address)
+    db.session.add(mac_entry)
+    db.session.commit()
+    
+    
+@app.route("/cookie", methods=['GET'])
+def get_cookie():
+    if current_user.is_authenticated:
+        mac_address = session.get('mac_address')
+        if mac_address:
+            return jsonify(cookie_value= mac_address)
+        else:
+            return jsonify(message="Cookie not found")
+    else:
+        return jsonify(message="User is not authenticated")
+    
+    
+    
+@app.route("/login/2fa/")
+def login_2fa():
+    # generating random secret key for authentication
+    secret = pyotp.random_base32()
+    return render_template("login_2fa.html", secret=secret)
+
+
+@app.route("/login/2fa/", methods=["POST"])
+def login_2fa_form():
+    # getting secret key used by user
+    secret = request.form.get("secret")
+    # getting OTP provided by user
+    otp = int(request.form.get("otp"))
+
+    # verifying submitted OTP with PyOTP
+    if pyotp.TOTP(secret).verify(otp):
+        response_data = {"success": True, "message": "The TOTP 2FA token is valid"}
+        session["authenticated"] = True
+        
+    else:
+        response_data = {"success": False, "message": "You have supplied an invalid 2FA token!"}
+        
+    return jsonify(response_data)
 
 # Using Flask_login 
 @app.route('/logout',methods=['POST'])
@@ -193,7 +292,7 @@ def login_Admin():
         else:
             return jsonify({'error':'Invalid Credentials'}),401
     else:
-        return jsonify({"message": "Login failed"}), 401
+        return jsonify({"message": "Invalid Request Method"}), 401
 
 
 @app.route('/filter-products', methods=['POST'])
@@ -237,6 +336,7 @@ def filter_products():
     
     
 @app.route('/products', methods=['GET'])
+@user_required
 def get_products():
     # Using Searlizers
     return Product.fs_get_delete_put_post()
@@ -482,7 +582,6 @@ def deleteUser(sno):
 @user_required
 def get_orderItem():
     items = db.session.query(OrderItem).all()
-    
     item_list = []
     for item in items:
         product = db.session.query(Product).filter_by(p_id=item.p_id).first()

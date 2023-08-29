@@ -30,8 +30,7 @@ class Product(db.Model, fs_mixin):
     def __repr__(self):
         return f'<Product {self.p_id} {self.title}>'
     
-    # def __repr__(self):
-    #     return '<Setting %r %r %r>' % (self.id, self.setting_type, self.value)
+    
     
 
 
@@ -46,6 +45,7 @@ class User(UserMixin, db.Model):
     u_email = db.Column(db.String(128),unique=True)
     u_details = db.Column(db.Text)
     password = db.Column(db.String(128))
+    
     
     def get_id(self):
         return str(self.u_id) 
@@ -75,3 +75,11 @@ class Admin(UserMixin, db.Model):
     
     def get_id(self):
         return str(self.id) 
+    
+    
+class MacAddress(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    mac_address = db.Column(db.String(17))  # Length of MAC address string
+    user_id = db.Column(db.Integer, db.ForeignKey('user.u_id'), nullable=False)
+    
+
