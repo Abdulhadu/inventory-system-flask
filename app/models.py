@@ -3,6 +3,7 @@ from flask_login import LoginManager , UserMixin , login_required ,login_user, l
 from datetime import datetime
 from flask_serialize import FlaskSerialize
 
+
 fs_mixin = FlaskSerialize(db)
 
 class Product(db.Model, fs_mixin):

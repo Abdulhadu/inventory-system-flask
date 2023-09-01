@@ -1,0 +1,116 @@
+{% extends "bootstrap/base.html" %}
+
+{% block title %}
+camera
+{% endblock %}
+
+{% block navbar %}
+<div class="navbar navbar-fixed-top">
+    <!-- ... -->
+</div>
+{% endblock %}
+
+
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-lg-12">
+            <div class="jumbotron text-center p-4">
+                <h2>Flask + 2FA Demo</h2>
+            </div>
+        </div>
+        <div style="padding: 0px;margin: 0px;width:220;height:240;">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+            {% for category, message in messages %}
+            <div class="alert alert-{{ category }}" role="alert">
+              {{ message }}
+            </div>
+            {% endfor %}
+            {% endif %}
+            {% endwith %}
+            <canvas style="position: absolute; left: 0%;z-index: -1; top:0%;height: 480px;width: 640px;" id="canvas">
+            </canvas>
+
+            <button id="stop" onclick="stop()" style="display:none">stop
+            </button>
+
+            <video id="player" style="position: sticky;height: 640;width: 480;z-index: -1;" autoplay>
+            </video>
+
+            <br>
+
+            <button id="capture"
+                style="align-content: center;position: absolute;border-radius: 100px; left: 47%; top:50%;"
+                class="btn btn-primary" onclick="capture()">
+                Capture
+            </button>
+
+            <form action="/facesetup" method="post" enctype="multipart/form-data">
+
+
+                <input type="text" id="pic" name="pic" style="display:none">
+
+                <button id="scan"
+                    style="align-content: center;position: absolute;border-radius: 100px;display: none; left: 52%; top:50%;"
+                    class="btn btn-primary">
+                    scan
+                </button>
+
+            </form>
+
+        </div>
+
+    </div>
+</div>
+
+
+<script>
+    const player = document.getElementById('player');
+    const canvas = document.getElementById('canvas');
+    const context = canvas.getContext('2d');
+    const captureButton = document.getElementById('capture');
+    const scan = document.getElementById('scan');
+    const img = document.getElementById('pic');
+
+
+    const vgaconstraints = {
+        video: { width: { exact: 720 }, height: { exact: 480 } },
+    };
+
+    function capture() {
+        canvas.style.position = "relative";
+        canvas.style.left = "0%";
+        canvas.style.top = "0%";
+        canvas.style.width = "720px";
+        canvas.style.height = "480px"
+
+
+
+        context.drawImage(player, 0, 0, canvas.width, canvas.height);
+        player.style.display = "none";
+        captureButton.style.display = "none";
+        scan.style.display = "block";
+
+        cap = canvas.toDataURL('image/png').split(",")[1];
+        img.value = cap;
+
+    }
+
+    function stop() {
+        player.srcObject.getVideoTracks().forEach(track => track.stop());
+    }
+
+
+
+    navigator.mediaDevices.getUserMedia(vgaconstraints)
+        .then((stream) => {
+            // Attach the video stream to the video element and autoplay.
+            player.srcObject = stream;
+        });
+</script>
+
+
+</html>
+{% endblock %}

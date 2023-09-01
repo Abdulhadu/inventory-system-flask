@@ -1,12 +1,52 @@
 {% extends "bootstrap/base.html" %}
 
 {% block content %}
+<style>
+  /* Custom CSS for underlining the active menu item */
+  .nav-item.active a.nav-link {
+    position: relative;
+    font-weight: bold;
+    /* Bold font for the selected item */
+  }
+
+  .nav-item.active a.nav-link::before {
+    content: "";
+    position: absolute;
+    width: 100%;
+    height: 3px;
+    /* Adjust the thickness of the underline as needed */
+    bottom: -5.5px;
+    /* Adjust the position of the underline */
+    background-color: #000;
+    /* Dark black color for the underline */
+  }
+</style>
 <div class="container">
   <div class="row justify-content-center">
     <div class="col-lg-12">
       <div class="jumbotron text-center p-4">
         <h2>INVENTORY SYSTEM</h2>
-        <h4>Setup and Authenticate 2FA</h4>
+        <div class="container">
+          <nav class="navbar navbar-expand-lg navbar-light bg-light">
+            <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav"
+              aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+              <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+              <ul class="navbar-nav mx-auto"> <!-- "mx-auto" for centering -->
+                <li class="nav-item mx-4">
+                  <a class="nav-link" href="/form1">Step 1: Login Details</a>
+                </li>
+                <li class="nav-item mx-4">
+                  <a class="nav-link" href="/form2">Step 2: Photo Verification</a>
+                </li>
+                <li class="nav-item mx-4 active">
+                  <a class="nav-link" href="/form3">Step 3: OTP Verification</a>
+                </li>
+              </ul>
+            </div>
+          </nav>
+        </div>
       </div>
     </div>
     <div class="col-lg-5">
@@ -34,15 +74,15 @@
     </div>
     <div class="col-lg-7">
       <div id="flashMessages" class="messages">
-      {% with messages = get_flashed_messages(with_categories=true) %}
-      {% if messages %}
-      {% for category, message in messages %}
-      <div class="alert alert-{{ category }}" role="alert">
-        {{ message }}
-      </div>
-      {% endfor %}
-      {% endif %}
-      {% endwith %}
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        {% for category, message in messages %}
+        <div class="alert alert-{{ category }}" role="alert">
+          {{ message }}
+        </div>
+        {% endfor %}
+        {% endif %}
+        {% endwith %}
       </div>
       <form id="otpForm" onsubmit="return authenticateUser();">
         <div class="form-group">
@@ -73,7 +113,7 @@
     alert("Successfully copied TOTP secret token!");
   }
 
- 
+
 
   function authenticateUser() {
     const flashMessages = document.getElementById("flashMessages");
@@ -95,12 +135,17 @@
           alertDiv.classList.add("alert");
           if (data.success) {
             alertDiv.classList.add("alert-success");
+            alertDiv.textContent = data.message;
+            flashMessages.innerHTML = ""; // Clear existing messages
+            flashMessages.appendChild(alertDiv);
+            
+            window.location.href = "/home";
           } else {
             alertDiv.classList.add("alert-danger");
+            alertDiv.textContent = data.message;
+            flashMessages.innerHTML = ""; // Clear existing messages
+            flashMessages.appendChild(alertDiv);
           }
-          alertDiv.textContent = data.message;
-          flashMessages.innerHTML = ""; // Clear existing messages
-          flashMessages.appendChild(alertDiv);
         })
         .catch(error => {
           console.error("An error occurred:", error);

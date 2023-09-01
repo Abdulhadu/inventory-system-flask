@@ -1,5 +1,5 @@
-{% extends "bootstrap/base.html" %}
-{% block title %}This is an example page{% endblock %}
+{% extends "menu.html" %}
+{% block title %}LOGIN{% endblock %}
 
 {% block navbar %}
 <div class="navbar navbar-fixed-top">
@@ -8,24 +8,66 @@
 {% endblock %}
 
 {% block content %}
+<style>
+  /* Custom CSS for underlining the active menu item */
+  .nav-item.active a.nav-link {
+      position: relative;
+      font-weight: bold; /* Bold font for the selected item */
+  }
+
+  .nav-item.active a.nav-link::before {
+      content: "";
+      position: absolute;
+      width: 100%;
+      height: 3px; /* Adjust the thickness of the underline as needed */
+      bottom: -5.5px; /* Adjust the position of the underline */
+      background-color: #000; /* Dark black color for the underline */
+  }
+</style>
 <div class="container">
   <div class="row justify-content-center">
     <div class="col-lg-12">
       <div class="jumbotron text-center p-4">
-        <h2>Flask + 2FA Demo</h2>
+        <h2>INVENTORY SYSTEM</h2>
+        <div class="container">
+          <nav class="navbar navbar-expand-lg navbar-light bg-light">
+            <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav"
+              aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+              <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+              <ul class="navbar-nav mx-auto "> <!-- "mx-auto" for centering -->
+                <li class="nav-item active mx-4 ">
+                  <a class="nav-link" href="/form1">Step 1: Login Details</a>
+                </li>
+                <li class="nav-item mx-4">
+                  <a class="nav-link" href="/form2">Step 2: Photo Verification</a>
+                </li>
+                <li class="nav-item mx-4" >
+                  <a class="nav-link" href="/form3">Step 3: OTP Verification</a>
+                </li>
+              </ul>
+            </div>
+          </nav>
+        </div>
       </div>
+
+
     </div>
+
     <div class="col-lg-6">
-      {% with messages = get_flashed_messages(with_categories=true) %}
-      {% if messages %}
-      {% for category, message in messages %}
-      <div class="alert alert-{{ category }}" role="alert">
-        {{ message }}
+      <div id="flashMessages" class="messages">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        {% for category, message in messages %}
+        <div class="alert alert-{{ category }}" role="alert">
+          {{ message }}
+        </div>
+        {% endfor %}
+        {% endif %}
+        {% endwith %}
       </div>
-      {% endfor %}
-      {% endif %}
-      {% endwith %}
-      <form method="POST">
+      <form method="POST" id="login-form" onsubmit="return loginUser();">
         <div class="form-group">
           <label for="username">Username</label>
           <input type="text" class="form-control" id="username" name="username" required>
@@ -41,4 +83,58 @@
     </div>
   </div>
 </div>
+<script>
+  let ipAddressPromise = fetchIpAddress();
+
+  async function fetchIpAddress() {
+    try {
+      const ipResponse = await fetch('https://api.ipify.org?format=json');
+      const ipData = await ipResponse.json();
+      return ipData.ip;
+    } catch (error) {
+      console.error("Error fetching IP address:", error);
+      return null;
+    }
+  }
+
+  async function loginUser() {
+    try {
+      const ipAddress = await ipAddressPromise; // Wait for the IP address promise to resolve
+
+      if (!ipAddress) {
+        console.error("IP address not obtained.");
+        return false; // Prevent form submission
+      }
+
+      const loginForm = document.getElementById('login-form');
+      const formData = new FormData(loginForm);
+      const username = formData.get('username');
+      const password = formData.get('password');
+
+      // Append stored IP address to the form data
+      formData.append('ipAddress', ipAddress);
+
+      // Send data to the server
+      const requestOptions = {
+        method: 'POST',
+        body: formData
+      };
+
+
+      const loginResponse = await fetch('/login', requestOptions);
+      const loginData = await loginResponse.json();
+
+      // Handle the login response as needed
+      // ...
+
+    } catch (error) {
+      console.error("An error occurred:", error);
+    }
+
+    return false; // Prevent the form from submitting normally
+  }
+
+  // Attach loginUser to form submission
+  document.getElementById('login-form').addEventListener('submit', loginUser);
+</script>
 {% endblock %}

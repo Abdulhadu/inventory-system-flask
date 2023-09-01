@@ -1,0 +1,59 @@
+{% extends "bootstrap/base.html" %}
+{% block title %}This is an example page{% endblock %}
+
+{% block navbar %}
+<div class="navbar navbar-fixed-top">
+  <!-- ... -->
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+  <div class="row justify-content-center">
+    <div class="col-lg-12">
+      <div class="jumbotron text-center p-4">
+        <h2>INVENTORY SYSTEM</h2>
+      </div>
+    </div>
+    <div class="col-lg-6">
+      <div id="flashMessages" class="messages">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+      {% for category, message in messages %}
+      <div class="alert alert-{{ category }}" role="alert">
+        {{ message }}
+      </div>
+      {% endfor %}
+      {% endif %}
+      {% endwith %}
+      </div>
+      <form method="POST" id="login-form" action="/signup">
+        <div class="form-group">
+          <label for="username">Username</label>
+          <input type="text" class="form-control" id="username" name="username" required>
+        </div>
+        <div class="form-group">
+          <label for="exampleFormControlInput1">Email address</label>
+          <input type="email" id="email" name="email" class="form-control" id="exampleFormControlInput1" placeholder="name@example.com">
+        </div>
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input type="password" id="password" name="password"  class="form-control" id="password" name="password" required>
+        </div>
+        <div class="form-group">
+          <label for="password">Conferm Password</label>
+          <input type="password" id="cpassword" name="cpassword" class="form-control" id="password" name="password" required>
+        </div>
+        <div class="form-group">
+          <label for="exampleFormControlTextarea1">Example textarea</label>
+          <textarea class="form-control" id="details" name="details" 
+           id="exampleFormControlTextarea1" rows="3"></textarea>
+        </div>
+        <div class="text-center">
+          <button type="submit" class="btn btn-primary">Register User</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

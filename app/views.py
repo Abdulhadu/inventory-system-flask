@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, session,  redirect, flash , jsonify, g, url_for
+from flask import Flask, render_template, request, session,  redirect, flash , jsonify, g, url_for, request, session
 from jinja2  import TemplateNotFound
 from app import app
 from app import db 
@@ -12,6 +12,23 @@ import netifaces
 import pythoncom
 from getmac import get_mac_address as gma
 from blinker import Namespace
+import flask
+import zlib
+from werkzeug.utils import secure_filename
+from flask import Response
+from cs50 import SQL
+from flask_session import Session
+from tempfile import mkdtemp
+from werkzeug.exceptions import default_exceptions, HTTPException, InternalServerError
+from werkzeug.security import check_password_hash, generate_password_hash
+from datetime import datetime
+import face_recognition
+from PIL import Image
+from base64 import b64encode, b64decode
+import re
+import os
+
+
 
 
 login_manager = LoginManager()
@@ -134,10 +151,11 @@ def admin_required(view_func):
     def wrapper(*args, **kwargs):
         print(current_user.__dict__)  # Print user attributes for debugging
         if current_user.is_authenticated and session.get('authenticated') and getattr(current_user, 'is_admin', False):
-            stored_mac_address = session.get('mac_address')
-            actual_mac_address = get_mac_address()
+            ip_address = session.get('ip_address')
+            print("ip is ", ip_address)
+            stored_mac_addresses = [record.mac_address for record in MacAddress.query.filter_by(user_id=current_user.id).all()]
 
-            if stored_mac_address and actual_mac_address and stored_mac_address == actual_mac_address:
+            if ip_address in stored_mac_addresses:
                 return view_func(*args, **kwargs)
             else:
                 return jsonify({"message": "Access denied due to MAC address mismatch"}), 403
@@ -148,11 +166,14 @@ def admin_required(view_func):
 def user_required(view_func):
     @wraps(view_func)
     def wrapper(*args, **kwargs):
+        print(current_user.__dict__)
         if current_user.is_authenticated and session.get('authenticated'):
-            stored_mac_address = session.get('mac_address')
-            actual_mac_address = get_mac_address()
-
-            if stored_mac_address and actual_mac_address and stored_mac_address == actual_mac_address:
+            ip_address = session.get('ip_address')
+            u_id = session.get("user_id")
+            print("ip is ", ip_address)
+            stored_mac_addresses = [record.mac_address for record in MacAddress.query.filter_by(user_id=u_id).all()]
+            print("mac adresses are",stored_mac_addresses)
+            if ip_address in stored_mac_addresses:
                 return view_func(*args, **kwargs)
             else:
                 return jsonify({"message": "Access denied due to MAC address mismatch"}), 403
@@ -162,41 +183,110 @@ def user_required(view_func):
 
 # ---------------------------------- user Login Section ---------------
 
+
+@app.route("/signup")
+def signup_page():
+    return render_template("signup.html")
+
+
+@app.route('/signup', methods=['POST', 'GET'])
+def signup():
+    if request.method == "POST":
+        # product= request.json  # Get the JSON data from the request
+        # u_name= product.get('u_name')
+        # u_email= product.get('u_email')
+        # u_details= product.get('u_details')
+        # password= product.get('password')
+        u_name= request.form.get('username')
+        u_email= request.form.get('email')
+        u_details= request.form.get('details')
+        password= request.form.get('password')
+        cpassword= request.form.get('cpassword')
+        if password == cpassword:
+            existing_user = User.query.filter_by(u_email=u_email).first()
+            if existing_user:
+                flash("User Email already Found..! Try with another email address", "danger")
+                return redirect(url_for("signup"))
+            stmt = insert(User).values(u_name=u_name, u_email=u_email, u_details=u_details, password=password)
+            db.session.execute(stmt)
+            db.session.commit()
+            session["user_id"] = u_email
+            flash("You are registered successfully", "success")
+            return redirect(url_for("facesetup"))
+        else:
+            flash("Passwords donot Match", "danger")
+            return redirect(url_for("signup"))
+    else:
+        flash("invalid request", "danger")
+        return redirect(url_for("signup"))
+
+
+@app.route("/home")
+def home():
+    return render_template("home.html")
+
 @app.route("/login")
 def login_page():
     return render_template("login.html")
-
-
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
         # user_data = request.json  # Get the JSON data from the request
-        # username = user_data.get('username')
-        # password = user_data.get('password')
-        username = request.form.get("username")
-        password = request.form.get("password")
+        username = request.form.get('username')
+        password = request.form.get('password')
+        ip_address = request.form.get('ipAddress')  
+        print("the Ip_address is : ", ip_address)
         user = User.query.filter_by(u_name=username).first()
         if user and user.password == password:
-            mac_address = gma()
-            print("mac address is: ", mac_address)
-
-            existing_mac_address = MacAddress.query.filter_by(user_id=user.u_id, mac_address=mac_address).first()
+            existing_mac_address = MacAddress.query.filter_by(user_id=user.u_id, mac_address=ip_address).first()
             if existing_mac_address:
-                flash("Device already registered.", "info")
-            else:
-                new_mac_address = MacAddress(user_id=user.u_id, mac_address=mac_address)
+                new_mac_address = MacAddress(user_id=user.u_id, mac_address=ip_address)
                 db.session.add(new_mac_address)
                 db.session.commit()
+                
                 flash("Device registered successfully.", "success")
-
                 login_user(user)
-            return redirect(url_for("login_2fa"))
+                session['ip_address'] = ip_address
+                session["user_id"] = user.u_id
+                return redirect(url_for("facereg"))
+                
+            else:
+                flash("We Observe that you are trying to login with new ip adress", "info")
+                return redirect(url_for("login"))
+              
         else:
             flash("You have supplied invalid login credentials!", "danger")
             return redirect(url_for("login"))
     else:
-        return jsonify({"message": "Invalid Request Method"}), 401
+        return jsonify({"message": "Invalid Request Method"}), 401, {'Content-Type': 'application/json'}
+    # if request.method == 'POST':
+    #     # user_data = request.json  # Get the JSON data from the request
+    #     # username = user_data.get('username')
+    #     # password = user_data.get('password')
+    #     username = request.form.get("username")
+    #     password = request.form.get("password")
+    #     user = User.query.filter_by(u_name=username).first()
+    #     if user and user.password == password:
+    #         mac_address = get('https://api.ipify.org').text
+    #         print("mac address is: ", mac_address)
+
+    #         existing_mac_address = MacAddress.query.filter_by(user_id=user.u_id, mac_address=mac_address).first()
+    #         if existing_mac_address:
+    #             flash("Device already registered.", "info")
+    #             return redirect(url_for("login"))
+    #         else:
+    #             new_mac_address = MacAddress(user_id=user.u_id, mac_address=mac_address)
+    #             db.session.add(new_mac_address)
+    #             db.session.commit()
+    #             flash("Device registered successfully.", "success")
+    #             login_user(user)
+    #             return redirect(url_for("login_2fa"))
+    #     else:
+    #         flash("You have supplied invalid login credentials!", "danger")
+    #         return redirect(url_for("login"))
+    # else:
+    #     return jsonify({"message": "Invalid Request Method"}), 401
 
 
 def get_mac_address():
@@ -222,6 +312,19 @@ def store_mac_address(user_id, mac_address):
     db.session.commit()
     
     
+    
+    
+@app.route("/address")
+def index():
+  """Retrieves the MAC address of the client device and returns it as a JSON response."""
+#   ip_address = flask.request.remote_addr
+  interface_names = netifaces.interfaces()
+
+  chosen_interface = interface_names[0]
+  mac_address = netifaces.ifaddresses(chosen_interface)[netifaces.AF_LINK][0]['addr']
+  return jsonify({"mac_address": mac_address})
+
+
 @app.route("/cookie", methods=['GET'])
 def get_cookie():
     if current_user.is_authenticated:
@@ -251,13 +354,271 @@ def login_2fa_form():
 
     # verifying submitted OTP with PyOTP
     if pyotp.TOTP(secret).verify(otp):
-        response_data = {"success": True, "message": "The TOTP 2FA token is valid"}
         session["authenticated"] = True
+        response_data = {"success": True, "message": "The TOTP 2FA token is valid"}
+        
         
     else:
         response_data = {"success": False, "message": "You have supplied an invalid 2FA token!"}
         
     return jsonify(response_data)
+
+
+
+# @app.route("/facesetup", methods=["GET", "POST"])
+# def facesetup():
+#     if request.method == "POST":
+#         encoded_image = (request.form.get("pic") + "==").encode('utf-8')
+#         user_id = session["user_id"]
+
+#         # Retrieve the user's id using the SQL Alchemy ORM
+#         user = User.query.filter_by(u_email=user_id).first()
+#         if user is None:
+#             flash("User Not Registered.", "danger")
+#             return redirect(url_for("login"))
+
+#         id_ = user.u_id
+
+#         image_path = './app/static/face/' + str(id_) + '.jpg'
+
+#         # Check if the user's image already exists
+#         if os.path.exists(image_path):
+#             flash("Image Already Exists", "danger")
+#             return render_template("face.html")
+
+#         compressed_data = zlib.compress(encoded_image, 9)
+#         uncompressed_data = zlib.decompress(compressed_data)
+#         decoded_data = b64decode(uncompressed_data)
+
+#         new_image_handle = open(image_path, 'wb')
+#         new_image_handle.write(decoded_data)
+#         new_image_handle.close()
+
+#         image_of_user = face_recognition.load_image_file(image_path)
+
+#         # Check for face matches with existing images in the "face/" folder
+#         image_already_exists = False
+#         for filename in os.listdir('./app/static/face/'):
+#             if filename.endswith('.jpg'):
+#                 existing_image_path = os.path.join('./app/static/face/', filename)
+#                 existing_image = face_recognition.load_image_file(existing_image_path)
+#                 try:
+#                     existing_face_encoding = face_recognition.face_encodings(existing_image)[0]
+#                     user_face_encoding = face_recognition.face_encodings(image_of_user)[0]
+#                 except IndexError:
+#                     continue
+
+#                 # Compare the face encodings
+#                 results = face_recognition.compare_faces([existing_face_encoding], user_face_encoding)
+#                 print("result is", results)
+
+#                 if results[0]:
+#                     flash("Image Already Exists for Another User", "danger")
+#                     os.remove(image_path)  # Remove the newly added image
+#                     image_already_exists = True
+#                     break
+
+#         if not image_already_exists:
+#             flash("Image Saved Successfully", "success")
+#             return redirect("/login")
+#         return render_template("face.html")
+
+#     else:
+#         return render_template("face.html")
+
+
+
+@app.route("/facesetup", methods=["GET", "POST"])
+def facesetup():
+    if request.method == "POST":
+        encoded_image = (request.form.get("pic")+"==").encode('utf-8')
+
+        user_id = session["user_id"]
+        user = User.query.filter_by(u_email=user_id).first()
+
+        if user:
+            id_ = user.u_id
+
+            compressed_data = zlib.compress(encoded_image, 9)
+            uncompressed_data = zlib.decompress(compressed_data)
+            decoded_data = b64decode(uncompressed_data)
+
+            new_image_path = './app/static/face/'+str(id_)+'.jpg'
+
+            new_image_handle = open(new_image_path, 'wb')
+            new_image_handle.write(decoded_data)
+            new_image_handle.close()
+
+            image_of_bill = face_recognition.load_image_file(new_image_path)
+            try:
+                bill_face_encoding = face_recognition.face_encodings(image_of_bill)[0]
+            except:
+                flash("No Clear Image", "danger")
+                return render_template("face.html")
+
+            existing_image_paths = [
+                os.path.join('./app/static/face/', filename)
+                for filename in os.listdir('./app/static/face')
+                if filename.lower().endswith('.jpg') and filename != str(id_) + '.jpg' 
+            ]
+            print("esixting path is ", existing_image_paths)
+            print("length is ", len(existing_image_paths))
+
+            if not existing_image_paths:
+                flash("No Other Users Exist", "success")
+                return redirect("/login")
+
+            for existing_image_path in existing_image_paths:
+                try:
+                    existing_image = face_recognition.load_image_file(existing_image_path)
+                    existing_face_encoding = face_recognition.face_encodings(existing_image)[0]
+                except:
+                    flash("Other image not cleared", "success")
+                    return render_template("face.html")
+
+                match = face_recognition.compare_faces([existing_face_encoding], bill_face_encoding)
+
+                if match[0]:
+                    flash("User Image already exists with another username", "danger")
+                    os.remove(new_image_path)
+                    return render_template("face.html")
+
+            return redirect("/login") # If the loop completes without finding a match, you can proceed here
+
+        else:
+            flash("User not found", "danger")
+
+        return redirect("/home")
+
+    else:
+        return render_template("face.html")
+
+
+
+
+
+
+
+
+
+# @app.route("/facesetup", methods=["GET", "POST"])
+# def facesetup():
+#     if request.method == "POST":
+#         encoded_image = (request.form.get("pic") + "==").encode('utf-8')
+#         user_id = session["user_id"]
+
+#         # Retrieve the user's id using the SQL Alchemy ORM
+#         user = User.query.filter_by(u_email=user_id).first()
+#         if user is None:
+#             flash("User Not Registered.", "danger")
+#             return redirect(url_for("login"))
+
+#         id_ = user.u_id
+
+#         image_path = './app/static/face/' + str(id_) + '.jpg'
+
+#         # Check if the user's image already exists
+#         if os.path.exists(image_path):
+#             flash("User Already Exists", "danger")
+#             return render_template("face.html")
+
+#         compressed_data = zlib.compress(encoded_image, 9)
+#         uncompressed_data = zlib.decompress(compressed_data)
+#         decoded_data = b64decode(uncompressed_data)
+
+#         new_image_handle = open(image_path, 'wb')
+#         new_image_handle.write(decoded_data)
+#         new_image_handle.close()
+
+#         image_of_user = face_recognition.load_image_file(image_path)
+#         user_face_encodings = face_recognition.face_encodings(image_of_user)
+
+#         # Check if there are existing images of the same user in the "face/" folder
+#         user_images = [f for f in os.listdir('./app/static/face/') if f.startswith(str(id_))]
+
+#         # There should be at least one other image for comparison
+#         for existing_image_filename in user_images:
+#             if existing_image_filename != str(id_) + '.jpg':
+#                 existing_image_path = os.path.join('./app/static/face/', existing_image_filename)
+#                 existing_image = face_recognition.load_image_file(existing_image_path)
+#                 existing_face_encodings = face_recognition.face_encodings(existing_image)
+
+#                 # Ensure that there's at least one face encoding in both images
+                
+#                 results = face_recognition.compare_faces(existing_face_encodings, user_face_encodings[0])
+#                 print("Results:", results)
+
+#                 if True in results:
+#                     flash("Image Already Exists for This User", "danger")
+#                     os.remove(image_path)  # Remove the newly added image
+#                     return render_template("face.html")
+
+#         return redirect("/login")  # Redirect to the home page upon successful addition
+
+#     else:
+#         return render_template("face.html")
+    
+
+@app.route("/facereg")
+def get_facereg():
+    return render_template("camera.html")
+
+
+
+@app.route("/facereg", methods=["GET", "POST"])
+def facereg():
+    session.clear()
+    if request.method == "POST":
+        encoded_image = (request.form.get("pic") + "==").encode('utf-8')
+        u_name = request.form.get("name") 
+        
+        user = User.query.filter_by(u_name=u_name).first()  
+        if not user:
+            flash("No Such User Recognized", "danger")
+            return redirect(url_for("facereg"))
+
+        id_ = user.u_id
+        compressed_data = zlib.compress(encoded_image, 9)
+        uncompressed_data = zlib.decompress(compressed_data)
+        decoded_data = b64decode(uncompressed_data)
+
+        # Save the image file
+        new_image_path = f'./app/static/face/unknown/{id_}.jpg'
+        with open(new_image_path, 'wb') as new_image_handle:
+            new_image_handle.write(decoded_data)
+
+        try:
+            image_of_bill = face_recognition.load_image_file(f'./app/static/face/{id_}.jpg')
+        except:
+            flash("Not set face recognition yet", "danger")
+            return render_template("camera.html")
+
+        bill_face_encoding = face_recognition.face_encodings(image_of_bill)[0]
+
+        unknown_image = face_recognition.load_image_file(new_image_path)
+        try:
+            unknown_face_encoding = face_recognition.face_encodings(unknown_image)[0]
+        except:
+            flash("The Image is Not Clear", "danger")
+            return render_template("camera.html")
+
+        # Compare faces
+        results = face_recognition.compare_faces([bill_face_encoding], unknown_face_encoding)
+
+        if results[0]:
+            # Query the user by username "swa" and set the user_id in the session
+            username = User.query.filter_by(u_name=u_name).first()
+            session["user_id"] = username.u_id
+            return redirect("/login/2fa/")
+        else:
+            flash("Incorrect Face", "danger")
+            return render_template("camera.html")
+
+    else:
+        return render_template("camera.html")
+
+
+
 
 # Using Flask_login 
 @app.route('/logout',methods=['POST'])
@@ -293,6 +654,12 @@ def login_Admin():
             return jsonify({'error':'Invalid Credentials'}),401
     else:
         return jsonify({"message": "Invalid Request Method"}), 401
+
+
+# -----------------------------------face recognitiion ------------------
+
+
+
 
 
 @app.route('/filter-products', methods=['POST'])
@@ -516,24 +883,6 @@ def get_user():
 
 
 
-@app.route('/addUser', methods=['POST'])
-def addUser():
-    if request.method == "POST":
-        product= request.json  # Get the JSON data from the request
-        u_name= product.get('u_name')
-        u_email= product.get('u_email')
-        u_details= product.get('u_details')
-        password= product.get('password')
-        existing_user = User.query.filter_by(u_email=u_email).first()
-        if existing_user:
-            return jsonify({"error": "User Email already Found..! Try with another email address"})
-        stmt = insert(User).values(u_name=u_name, u_email=u_email, u_details=u_details, password=password)
-        db.session.execute(stmt)
-        db.session.commit()
-        return jsonify({"message": "User added successfully"}), 201
-            
-    else:
-        return jsonify({"message": "Invalid request"}), 400
 
          
 @app.route('/updateUser/<int:sno>', methods=['PATCH'])
