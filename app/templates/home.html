@@ -29,9 +29,19 @@
 
     <main role="main" class="container">
       <div class="jumbotron">
-        <h1>WELCOMEE TO HOME PAGE</h1>
+        {% if current_user.u_name %}
+        <h1>WELCOME  {{current_user.u_name }}!</h1>
+        {% endif %}
+        
+        <h2>Your Dashboard</h2>
         <p class="lead">This example is a quick exercise to illustrate how the top-aligned navbar works. As you scroll, this navbar remains in its original position and moves with the rest of the page.</p>
-        <a class="btn btn-lg btn-primary" href="../../components/navbar/" role="button">View navbar docs »</a>
+        <br>
+        {% if session["authenticated"] == False %}
+        <a class="text-danger font-weight-bold">Your Account are not Verified. Kindly verify your account </a>
+        <br>
+        <a class="mt-3 btn btn-lg btn-primary" href="/login/2fa" role="button">Verify Your Account</a>
+        {% endif %}
+      
       </div>
     </main>
 

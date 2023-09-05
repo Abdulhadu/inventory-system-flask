@@ -8,6 +8,7 @@
 {% endblock %}
 
 {% block content %}
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <div class="container">
   <div class="row justify-content-center">
     <div class="col-lg-12">
@@ -27,7 +28,7 @@
       {% endif %}
       {% endwith %}
       </div>
-      <form method="POST" id="login-form" action="/signup">
+      <form method="POST" id="signup-form" onsubmit="return registerUser();">
         <div class="form-group">
           <label for="username">Username</label>
           <input type="text" class="form-control" id="username" name="username" required>
@@ -38,11 +39,13 @@
         </div>
         <div class="form-group">
           <label for="password">Password</label>
-          <input type="password" id="password" name="password"  class="form-control" id="password" name="password" required>
+          <input type="password" id="password" name="password" class="form-control" required>
+          <div id="password-error" class="text-danger"></div>
         </div>
         <div class="form-group">
-          <label for="password">Conferm Password</label>
-          <input type="password" id="cpassword" name="cpassword" class="form-control" id="password" name="password" required>
+          <label for="cpassword">Confirm Password</label>
+          <input type="password" id="cpassword" name="cpassword" class="form-control" required>
+          <div id="cpassword-error" class="text-danger"></div>
         </div>
         <div class="form-group">
           <label for="exampleFormControlTextarea1">Example textarea</label>
@@ -56,4 +59,85 @@
     </div>
   </div>
 </div>
+<script>
+  $(document).ready(function() {
+
+    function validatePassword() {
+      var password = $("#password").val();
+      var confirmPassword = $("#cpassword").val();
+  
+      if (password !== confirmPassword) {
+        $("#password-error").text("Passwords do not match").show();
+        $("#cpassword-error").text("Passwords do not match").show();
+        return false;
+      } else {
+        $("#password-error").hide();
+        $("#cpassword-error").hide();
+        return true;
+      }
+    }
+  
+    // Attach a listener to the form submission
+    $("#login-form").submit(function() {
+      return validatePassword();
+    });
+  
+    $("#password, #cpassword").keyup(validatePassword);
+  });
+
+  let ipAddressPromise = fetchIpAddress();
+
+  async function fetchIpAddress() {
+    try {
+      const ipResponse = await fetch('https://api.ipify.org?format=json');
+      const ipData = await ipResponse.json();
+      return ipData.ip;
+    } catch (error) {
+      console.error("Error fetching IP address:", error);
+      return null;
+    }
+  }
+
+  async function registerUser() {
+    try {
+      const ipAddress = await ipAddressPromise; 
+
+      if (!ipAddress) {
+        console.error("IP address not obtained.");
+        return false; // Prevent form submission
+      }
+
+      const loginForm = document.getElementById('signup-form');
+      const formData = new FormData(loginForm);
+      const username = formData.get('username');
+      const email = formData.get('email');
+      const password = formData.get('password');
+
+      // Append stored IP address to the form data
+      formData.append('ipAddress', ipAddress);
+
+      console.log("formData is : ", formData)
+      // Send data to the server
+      const requestOptions = {
+        method: 'POST',
+        body: formData
+      };
+
+      const loginResponse = await fetch('/signup', requestOptions);
+      const loginData = await loginResponse.json();
+
+      // Handle the login response as needed
+      // ...
+
+    } catch (error) {
+      console.error("An error occurred:", error);
+    }
+
+    return false; // Prevent the form from submitting normally
+  }
+
+  // Attach loginUser to form submission
+  document.getElementById('signup-form').addEventListener('submit', registerUser);
+
+</script>
 {% endblock %}

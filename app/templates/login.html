@@ -51,8 +51,6 @@
           </nav>
         </div>
       </div>
-
-
     </div>
 
     <div class="col-lg-6">
@@ -80,61 +78,51 @@
           <button type="submit" class="btn btn-primary">Authenticate User</button>
         </div>
       </form>
+
+      <script>
+        async function fetchIpAddressAndLogin() {
+          try {
+            const ipResponse = await fetch('https://api.ipify.org?format=json');
+            const ipData = await ipResponse.json();
+            const ipAddress = ipData.ip;
+            console.log(ipAddress)
+
+            if (!ipAddress) {
+              console.error("IP address not obtained.");
+              return false; // Prevent form submission
+            }
+
+            const loginForm = document.getElementById('login-form');
+            const formData = new FormData(loginForm);
+            const username = formData.get('username');
+            const password = formData.get('password');
+
+            // Append stored IP address to the form data
+            formData.append('ipAddress', ipAddress);
+
+            // Send data to the server
+            const requestOptions = {
+              method: 'POST',
+              body: formData
+            };
+
+            const loginResponse = await fetch('/login', requestOptions);
+            const loginData = await loginResponse.json();
+
+            // Handle the login response as needed
+            // ...
+
+          } catch (error) {
+            console.error("An error occurred:", error);
+          }
+
+          return false; // Prevent the form from submitting normally
+        }
+
+        // Attach fetchIpAddressAndLogin to form submission
+        document.getElementById('login-form').addEventListener('submit', fetchIpAddressAndLogin);
+      </script>
     </div>
   </div>
 </div>
-<script>
-  let ipAddressPromise = fetchIpAddress();
-
-  async function fetchIpAddress() {
-    try {
-      const ipResponse = await fetch('https://api.ipify.org?format=json');
-      const ipData = await ipResponse.json();
-      return ipData.ip;
-    } catch (error) {
-      console.error("Error fetching IP address:", error);
-      return null;
-    }
-  }
-
-  async function loginUser() {
-    try {
-      const ipAddress = await ipAddressPromise; // Wait for the IP address promise to resolve
-
-      if (!ipAddress) {
-        console.error("IP address not obtained.");
-        return false; // Prevent form submission
-      }
-
-      const loginForm = document.getElementById('login-form');
-      const formData = new FormData(loginForm);
-      const username = formData.get('username');
-      const password = formData.get('password');
-
-      // Append stored IP address to the form data
-      formData.append('ipAddress', ipAddress);
-
-      // Send data to the server
-      const requestOptions = {
-        method: 'POST',
-        body: formData
-      };
-
-
-      const loginResponse = await fetch('/login', requestOptions);
-      const loginData = await loginResponse.json();
-
-      // Handle the login response as needed
-      // ...
-
-    } catch (error) {
-      console.error("An error occurred:", error);
-    }
-
-    return false; // Prevent the form from submitting normally
-  }
-
-  // Attach loginUser to form submission
-  document.getElementById('login-form').addEventListener('submit', loginUser);
-</script>
 {% endblock %}
